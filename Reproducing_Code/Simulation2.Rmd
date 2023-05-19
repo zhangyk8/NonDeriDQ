@@ -1,0 +1,75 @@
+---
+title: "Simulation 2 (First-Order Derivative Estimation)"
+author: "Yikun Zhang"
+date: "2023-05-19"
+output: html_document
+---
+
+This file reproduces the simulation study 2 and its associated figures (Figure 1b, 3a, 3b) in Liu and De Brabanter (2020). 
+
+```{r}
+library(ks)
+library(locpol)
+library(ggplot2)
+library(latex2exp)
+
+source('derivative_estimation_quotients.R')
+```
+
+```{r}
+n = 1000
+set.seed(123)
+X_2 = rbeta(n, shape1 = 2, shape2 = 2)
+m_2 = 50*exp(-8*(1-2*X_2)^4)*(1-2*X_2)
+eps2 = rnorm(n, mean = 0, sd = 2)
+Y_2 = m_2 + eps2
+```
+
+```{r}
+pdf("./Figures/sim2_raw_rep.pdf", width = 8, height = 6)
+par(mar = c(4, 4.8, 0.2, 0.3))  
+plot(X_2, Y_2, xlab = "X", ylab = "Y", cex.lab=2, cex.axis=2)
+```
+
+```{r}
+U_2 = kcde(X_2, eval.points = X_2, tail.flag = "lower.tail")$estimate
+k_opt2 = OptK(Y = Y_2, U = U_2, k_range = seq(1, 499, by = 1), h = NULL, kern = gaussK)
+# k_opt2 = 22
+print(k_opt2)
+deri_est2 = DerivEstQuotient(Y = Y_2, X = X_2, k = k_opt2)
+
+h_opt2 = RSSBandwidth(Y = deri_est2$Y_deri, U = deri_est2$U_ord, k = k_opt2, h_range = seq(0.04, 0.1, by = 0.005), deg = 3)
+print(h_opt2)
+h_opt2 = h_opt2*1.01431
+
+qry_range = seq(k_opt2 + 1, n-k_opt2, by = 1)
+u_qry = seq(min(deri_est2$U_ord[qry_range]), max(deri_est2$U_ord[qry_range]), length.out = 100)
+x_qry = qbeta(u_qry, shape1 = 2, shape2 = 2)
+deri_true2 = exp(-8*((1-2*x_qry)^4))*(3200*(1-2*x_qry)^4-100) / dbeta(x_qry, shape1 = 2, shape2 = 2)
+
+Y_deriv_sm2 = LocalPolyReg(Y = deri_est2$Y_deri, X = deri_est2$U_ord, xeval = deri_est2$U_ord, h = h_opt2, kern = gaussK, deg = 3, deriv_ord = 0)
+
+ggplot() + geom_point(mapping = aes(x = deri_est2$U_ord, y = deri_est2$Y_deri), size = 0.7, color = "blue") + geom_point(mapping = aes(x = deri_est2$U_ord, y = Y_deriv_sm2), size = 1, color = "green") + geom_line(mapping = aes(x = u_qry, y = deri_true2), color = "red", linetype = "dashed", size = 1) + theme_bw(base_size = 22) + xlab("u") + ylab(TeX("y', $\\hat{r}'(u)$"))
+```
+
+```{r}
+Y_deriv_trans2 = Y_deriv_sm2 * deri_est2$den_ord
+
+x_qry = seq(min(deri_est2$X_ord[qry_range]), max(deri_est2$X_ord[qry_range]), length.out = 100)
+True_deriv2 = exp(-8*((1-2*x_qry)^4))*(3200*(1-2*x_qry)^4-100)
+
+pdf("./Figures/sim2_deriv_u.pdf", width = 8.5, height = 6.3)
+par(mar = c(4, 6, 1.5, 0.8))  
+plot(deri_est2$U_ord[qry_range], deri_est2$Y_deri[qry_range], col="blue", pch=20, xlab = "U", ylab = TeX("$\\hat{Y}^{(1)}, \\hat{r}^{(1)}(u)$"), cex.lab=2, cex.axis=2)
+lines(deri_est2$U_ord[qry_range], y = Y_deriv_sm2[qry_range], col="red", lty="dashed", lwd=5)
+legend(0.3, 155, legend=c(TeX("Noisy $\\hat{r}^{(1)}(x)$"), TeX("Smoothed $\\hat{r}^{(1)}(x)$")), fill=c("blue", "red"), cex=1.5)
+```
+
+```{r}
+pdf("./Figures/sim2_deriv_x_rep.pdf", width = 8.5, height = 6.3)
+par(mar = c(4, 6, 1.5, 0.8)) 
+plot(deri_est2$X_ord[qry_range], Y_deriv_trans2[qry_range], pch=16, xlab = "X", ylab = TeX("$m'(x), \\hat{m}'(x)$"), col="blue", cex.lab=2, cex.axis=2, cex=0.7, ylim=range(-102:110))
+lines(x_qry, True_deriv2, col="black", lwd=5)
+legend(0.35, 118, legend=c(TeX("Smoothed $\\hat{m}'(x)$"), "True derivative"), fill=c("blue", "black"), cex=1.5)
+```
+
