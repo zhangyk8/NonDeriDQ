@@ -305,7 +305,7 @@ par(mar = c(5, 5, 0.8, 0.8))
 boxplot(MAE4_sec[order(colMeans(MAE4_sec[sapply(MAE4_sec, is.numeric)]))], ylab="MAEadjusted", cex.axis=1.6, cex.lab=1.7, col = NULL, varwidth = TRUE, boxlwd = 2, xaxt = "n")
 tick = seq_along(names(sort(colMeans(MAE4_sec[sapply(MAE4_sec, is.numeric)]))))
 axis(1, at = tick, labels = FALSE)
-text(tick, par("usr")[3] - 3, names(sort(colMeans(MAE4_sec[sapply(MAE4_sec, is.numeric)]))), srt = 45, xpd = TRUE)
+text(tick, par("usr")[3] - 320, names(sort(colMeans(MAE4_sec[sapply(MAE4_sec, is.numeric)]))), srt = 45, xpd = TRUE)
 ```
 
 
