@@ -1,0 +1,232 @@
+---
+title: "Simulation 7 (First-Order Derivative Estimation with Monte Carlo Repeated
+  Experiments)"
+author: "Yikun Zhang"
+date: "2023-05-23"
+output: html_document
+---
+
+```{r}
+library(ks)
+library(locpol)
+library(ggplot2)
+library(latex2exp)
+library(pspline)
+
+source('derivative_estimation_quotients.R')
+source('kernel_derivative_estimator.R')
+```
+
+```{r}
+n = 700
+set.seed(123)
+X_6 = runif(n, min = 0, max = 1)
+m_6 = 8*exp(-(1-5*X_6)^3*(1-7*X_6))
+eps6 = rnorm(n, mean = 0, sd = 0.1)
+Y_6 = m_6 + eps6
+
+pdf("./Figures/sim7_raw_rep.pdf", width = 8, height = 6)
+par(mar = c(4, 4.8, 0.2, 0.3))  
+plot(X_6, Y_6, xlab = "X", ylab = "Y", cex.lab=2, cex.axis=2)
+```
+
+```{r}
+pdf("./Figures/sim7_raw.pdf", width = 8, height = 6)
+par(mar = c(4, 4.8, 0.2, 0.3))  
+plot(X_6, Y_6, xlab = "X", ylab = "Y", cex.lab=2, cex.axis=2)
+lines(sort(X_6), m_6[order(X_6)], col="red", lwd=5)
+legend(0.47, 8.7, legend=c("Raw data for a random run", TeX("True function $m(X)$")),
+       fill=c("black", "red"), cex=1.5)
+```
+
+
+```{r}
+x_qry = seq(min(X_6), max(X_6), length.out = 200)
+m6SecDeriv = function(x){
+  res = 32*((70*x - 11)^2*(5*x-1)^3 - 525*x + 90)*(5*x - 1)*exp(-(1-5*x)^3*(1-7*x))
+  return(res)
+}
+True_sec6 = m6SecDeriv(x_qry)
+
+# locpol
+dat6 = data.frame(X = X_6, Y = Y_6)
+Y_locpol_sec3 = locpol(Y ~ X, data = dat6, kernel = gaussK, xeval = X_6, deg = 3)
+Y_locpol_sec4 = locpol(Y ~ X, data = dat6, kernel = gaussK, xeval = X_6, deg = 4)
+
+# pspline
+Y_pspline_sec6 = sm.spline(x = sort(X_6), y = Y_6[order(X_6)], norder = 2)
+Y_psp_deriv6 = predict(Y_pspline_sec6, xarg = sort(X_6), nderiv = 2)
+
+## Proposed estimator
+U_6 = kcde(X_6, eval.points = X_6, tail.flag = "lower.tail")$estimate
+k_opt6 = OptK(Y = Y_6, U = U_6, k_range = seq(1, 300, by = 1), h = NULL, kern = gaussK)
+print(k_opt6)
+deri_est6 = DerivEstQuotient(Y = Y_6, X = X_6, k = k_opt6)
+
+k_opt_2d6 = OptK1K2(Y = Y_6, U = U_6, k1_range = seq(1, 100, by = 1), k2_range = seq(1, 100, by = 1), h = NULL, kern = gaussK)
+# k_opt_2d6 = list("k1" = 15, "k2" = 8)
+print(k_opt_2d6)
+deri_sec6 = SecondDerivEstQuotient(Y = Y_6, X = X_6, k1 = k_opt_2d6$k1, k2 = k_opt_2d6$k2)
+
+h_opt6 = RSSBandwidth(Y = deri_est6$Y_deri, U = deri_est6$U_ord, k = k_opt6, 
+                      h_range = seq(0.03, 0.1, by = 0.005), deg = 3)
+print(h_opt6)
+h_opt6 = h_opt6*1.01431
+h_opt_2d6 = RSSBandwidth(Y = deri_sec6$Y_sec, U = deri_sec6$U_ord, k = k_opt_2d6$k1 + k_opt_2d6$k2, h_range = seq(0.03, 0.1, by = 0.005), deg = 3)
+print(h_opt_2d6)
+h_opt_2d6 = h_opt_2d6*1.01431
+
+qry_range = seq(k_opt_2d6$k1 + k_opt_2d6$k2 + 1, 700 - k_opt_2d6$k1 - k_opt_2d6$k2, by = 1)
+Y_deriv_sm6 = LocalPolyReg(Y = deri_est6$Y_deri[qry_range], X = deri_est6$U_ord[qry_range], xeval = deri_est6$U_ord, h = h_opt6, kern = gaussK, deg = 3, deriv_ord = 0)
+# Y_deriv_sm6 = LocalPolyReg(Y = deri_est6$Y_deri, X = deri_est6$U_ord, xeval = deri_est6$U_ord, h = h_opt6, kern = gaussK, deg = 3, deriv_ord = 0)
+# Y_sec_sm6 = LocalPolyReg(Y = deri_sec6$Y_sec, X = deri_sec6$U_ord, xeval = deri_sec6$U_ord, h = h_opt_2d6, kern = gaussK, deg = 3, deriv_ord = 0)
+Y_sec_sm6 = LocalPolyReg(Y = deri_sec6$Y_sec[qry_range], X = deri_sec6$U_ord[qry_range], xeval = deri_sec6$U_ord, h = h_opt_2d6, kern = gaussK, deg = 3, deriv_ord = 0)
+Y_sec_trans6 = Y_sec_sm6 * deri_sec6$den_ord^2 + Y_deriv_sm6 * deri_sec6$den_deriv_ord
+
+## Proposed estimator with the oracle data-generating distribution
+U_6o = X_6
+k_opt6o = OptK(Y = Y_6, U = U_6o, k_range = NULL, h = NULL, kern = gaussK)
+print(k_opt6o)
+deri_est6o = DerivEstQuotient(Y = Y_6, X = X_6, k = k_opt6o, U = U_6o)
+k_opt_2d6o = OptK1K2(Y = Y_6, U = U_6o, k1_range = seq(1, 100, by = 1), k2_range = seq(1, 100, by = 1), h = NULL, kern = gaussK)
+# k_opt_2d6 = list("k1" = 15, "k2" = 8)
+print(k_opt_2d6o)
+deri_sec6o = SecondDerivEstQuotient(Y = Y_6, X = X_6, k1 = k_opt_2d6o$k1, k2 = k_opt_2d6o$k2, U = U_6o)
+
+h_opt6o = RSSBandwidth(Y = deri_est6o$Y_deri, U = deri_est6o$U_ord, k = k_opt6o, 
+                       h_range = seq(0.03, 0.1, by = 0.005), deg = 3)
+print(h_opt6o)
+h_opt6o = h_opt6o*1.01431
+h_opt_2d6o = RSSBandwidth(Y = deri_sec6o$Y_sec, U = deri_sec6o$U_ord, k = k_opt_2d6o$k1 + k_opt_2d6o$k2, h_range = seq(0.03, 0.1, by = 0.005), deg = 3)
+print(h_opt_2d6o)
+h_opt_2d6o = h_opt_2d6o*1.01431
+
+qry_range_o = seq(k_opt_2d6o$k1 + k_opt_2d6o$k2 + 1, 700 - k_opt_2d6o$k1 - k_opt_2d6o$k2, by = 1)
+Y_deriv_sm6o = LocalPolyReg(Y = deri_est6o$Y_deri[qry_range_o], X = deri_est6o$U_ord[qry_range_o], xeval = deri_est6o$U_ord, h = h_opt6o, kern = gaussK, deg = 3, deriv_ord = 0)
+Y_sec_sm6o = LocalPolyReg(Y = deri_sec6o$Y_sec[qry_range_o], X = deri_sec6o$U_ord[qry_range_o], xeval = deri_sec6o$U_ord, h = h_opt_2d6o, kern = gaussK, deg = 3, deriv_ord = 0)
+Y_sec_trans6o = Y_sec_sm6o + Y_deriv_sm6o * 0
+
+ggplot() + geom_point(mapping = aes(x = Y_locpol_sec3$lpFit$X[qry_range], y = Y_locpol_sec3$lpFit$Y2[qry_range]), size = 1, color = "green") + geom_point(mapping = aes(x = sort(X_6), y = Y_psp_deriv6[,1]), size = 1, color = "blue") + geom_point(mapping = aes(x = deri_sec6$X_ord[qry_range], y = Y_sec_trans6[qry_range]), size = 1, color = "red") + geom_point(mapping = aes(x = deri_sec6o$X_ord[qry_range_o], y = Y_sec_trans6o[qry_range_o]), size = 1, color = "orange") + geom_line(mapping = aes(x = x_qry, y = True_sec6), color = "black", size = 1) + theme_bw(base_size = 22) + xlab("X") + ylab(TeX("$m''(x), \\hat{m}''(x)$"))
+```
+
+```{r}
+True_sec6 = m6SecDeriv(x_qry[(x_qry > min(X_6) + 0.02) & (x_qry < max(X_6) -0.02)])
+
+qry_range = seq(k_opt_2d6$k1 + k_opt_2d6$k2 -36, 700 - k_opt_2d6$k1 - k_opt_2d6$k2 + 36, by = 1)
+pdf("./Figures/sim7_deriv_com.pdf", width = 8.5, height = 6.3)
+par(mar = c(4, 5.5, 1, 0.8)) 
+plot(deri_sec6$X_ord[qry_range], Y_sec_trans6[qry_range], pch=16, xlab = "X", ylab = TeX("$m''(X), \\hat{m}''(X)$"), col="red", cex.lab=2, cex.axis=2, cex=0.7, type="l", lty="dashed", lwd=4, ylim = c(-900, 1000), xlim = c(0,1))
+lines(Y_locpol_sec3$lpFit$X[qry_range], Y_locpol_sec3$lpFit$Y2[qry_range], col="green", lty="dashed", lwd=3)
+lines(sort(X_6)[(sort(X_6) > min(X_6) + 0.02) & (sort(X_6) > min(X_6) - 0.02)], Y_psp_deriv6[(sort(X_6) > min(X_6) + 0.02) & (sort(X_6) > min(X_6) - 0.02),1], col="blue", lty="dashed", lwd=3)
+lines(x_qry[(x_qry > min(X_6) + 0.02) & (x_qry < max(X_6) -0.02)], True_sec6, col="black", lwd=3)
+legend(0.605, -425, legend=c("Proposed Estimator", "Locpol with p=3", "Cubic psplines", "True derivative"), fill=c("red", "green", "blue", "black"), cex=1.5)
+```
+
+
+```{r}
+n = 700
+B = 100
+MAE_locpol_sec3 = numeric(B)
+MAE_locpol_sec4 = numeric(B)
+MAE_locpol_sec5 = numeric(B)
+MAE_psp_sec = numeric(B)
+MAE_GM_sec = numeric(B)
+MAE_NWVar_sec = numeric(B)
+
+Med_AbsErr_locpol_sec3 = numeric(B)
+Med_AbsErr_locpol_sec4 = numeric(B)
+Med_AbsErr_locpol_sec5 = numeric(B)
+Med_AbsErr_psp_sec = numeric(B)
+Med_AbsErr_GM_sec = numeric(B)
+Med_AbsErr_NWVar_sec = numeric(B)
+
+set.seed(123)
+start_time = Sys.time()
+for(b in 1:B){
+  X_6 = runif(n, min = 0, max = 1)
+  m_6 = 8*exp(-(1-5*X_6)^3*(1-7*X_6))
+  eps6 = rnorm(n, mean = 0, sd = 0.1)
+  Y_6 = m_6 + eps6
+
+  # locpol
+  dat6 = data.frame(X = X_6, Y = Y_6)
+  Y_locpol_sec3 = locpol(Y ~ X, data = dat6, kernel = gaussK, xeval = X_6, deg = 3)
+  Y_locpol_sec4 = locpol(Y ~ X, data = dat6, kernel = gaussK, xeval = X_6, deg = 4)
+  Y_locpol_sec5 = locpol(Y ~ X, data = dat6, kernel = gaussK, xeval = X_6, deg = 5)
+
+  MAE_locpol_sec3[b] = mean(abs(Y_locpol_sec3$lpFit$Y2 - m6SecDeriv(Y_locpol_sec3$lpFit$X))[31:670])
+  MAE_locpol_sec4[b] = mean(abs(Y_locpol_sec4$lpFit$Y2 - m6SecDeriv(Y_locpol_sec3$lpFit$X))[31:670])
+  MAE_locpol_sec5[b] = mean(abs(Y_locpol_sec5$lpFit$Y2 - m6SecDeriv(Y_locpol_sec5$lpFit$X))[31:670])
+
+  Med_AbsErr_locpol_sec3[b] = median(abs(Y_locpol_sec3$lpFit$Y2 - m6SecDeriv(Y_locpol_sec3$lpFit$X)))
+  Med_AbsErr_locpol_sec4[b] = median(abs(Y_locpol_sec4$lpFit$Y2 - m6SecDeriv(Y_locpol_sec3$lpFit$X)))
+  Med_AbsErr_locpol_sec5[b] = median(abs(Y_locpol_sec5$lpFit$Y2 - m6SecDeriv(Y_locpol_sec5$lpFit$X)))
+
+  # pspline
+  Y_pspline_sec6 = sm.spline(x = sort(X_6), y = Y_6[order(X_6)], norder = 2)
+  Y_psp_sec6 = predict(Y_pspline_sec6, xarg = sort(X_6), nderiv = 2)
+
+  MAE_psp_sec[b] = mean(abs(Y_psp_sec6 - m6SecDeriv(sort(X_6)))[31:670])
+  Med_AbsErr_psp_sec[b] = median(abs(Y_psp_sec6 - m6SecDeriv(sort(X_6))))
+
+  # Gasser-Muller derivative estimator
+  Y_gm_sec = GasserMullerEst(Y_6, X_6, xeval=sort(X_6), h=NULL, kern=gaussDeriv, deriv_ord=2)
+  MAE_GM_sec[b] = mean(abs(Y_gm_sec - m6SecDeriv(sort(X_6)))[31:670])
+  Med_AbsErr_GM_sec[b] = median(abs(Y_gm_sec - m6SecDeriv(sort(X_6))))
+
+  # Variant of Nadaraya-Watson derivative estimator
+  Y_varNW_sec = NWVarEst(Y_6, X_6, xeval=sort(X_6), h_reg = NULL, h_den = NULL, kern = gaussDeriv2, deriv_ord = 2)
+  MAE_NWVar_sec[b] = mean(abs(Y_varNW_sec - m6SecDeriv(sort(X_6)))[31:670])
+  Med_AbsErr_NWVar_sec[b] = median(abs(Y_varNW_sec - m6SecDeriv(sort(X_6))))
+}
+print(Sys.time() - start_time)
+#
+MAE6 = data.frame(locpol3 = MAE_locpol_sec3, locpol4 = MAE_locpol_sec4, locpol5 = MAE_locpol_sec5, psplines = MAE_psp_sec, Gasser_Muller = MAE_GM_sec, NW_Var = MAE_NWVar_sec)
+write.csv(MAE6, "./MAE6.csv", row.names = FALSE)
+
+Med_AbsErr6 = data.frame(locpol3 = Med_AbsErr_locpol_sec3,
+                         locpol4 = Med_AbsErr_locpol_sec4,
+                         locpol5 = Med_AbsErr_locpol_sec5,
+                         psplines = Med_AbsErr_psp_sec,
+                         Gasser_Muller = Med_AbsErr_GM_sec,
+                         NW_Var = Med_AbsErr_NWVar_sec)
+write.csv(Med_AbsErr6, "./Med_AbsErr6.csv", row.names = FALSE)
+```
+
+```{r}
+MAE6 = read.csv("./MAE6.csv", header = TRUE)
+MAE_prop6 = read.csv("./deri_second_sim6_new.csv", header = TRUE)
+# MAE_prop6[MAE_prop6$MAE_adj > 300, "MAE_adj"] = 200
+MAE6$proposed = MAE_prop6[MAE_prop6$scenario == "Proposed", "MAE_adj"]
+MAE6$proposed_unif = MAE_prop6[MAE_prop6$scenario == "Oracle", "MAE_adj"]
+
+boxplot(MAE6[c("locpol3", "locpol4", "locpol5", "psplines", "proposed", "proposed_unif")], ylab="MAEadjusted")
+```
+
+
+```{r}
+pdf("./Figures/sim7_sec_boxplot_full.pdf", width = 8, height = 6)
+par(mar = c(5, 5, 0.8, 0.8))
+boxplot(MAE6[order(colMeans(MAE6[sapply(MAE6, is.numeric)]))], ylab="MAEadjusted", cex.axis=1.6, cex.lab=1.7, col = NULL, varwidth = TRUE, boxlwd = 2, xaxt = "n")
+tick = seq_along(names(sort(colMeans(MAE6[sapply(MAE6, is.numeric)]))))
+axis(1, at = tick, labels = FALSE)
+text(tick, par("usr")[3] - 30000, names(sort(colMeans(MAE6[sapply(MAE6, is.numeric)]))), srt = 45, xpd = TRUE)
+```
+
+```{r}
+MAE6_sub = MAE6[c("locpol3", "locpol4", "locpol5", "psplines", "proposed", "proposed_unif")]
+pdf("./Figures/sim7_sec_boxplot_sub.pdf", width = 8, height = 6)
+par(mar = c(5, 5, 0.8, 0.8))
+boxplot(MAE6_sub[order(colMeans(MAE6_sub[sapply(MAE6_sub, is.numeric)]))], ylab="MAEadjusted", cex.axis=1.6, cex.lab=1.7, col = NULL, varwidth = TRUE, boxlwd = 2, xaxt = "n")
+tick = seq_along(names(sort(colMeans(MAE6_sub[sapply(MAE6_sub, is.numeric)]))))
+axis(1, at = tick, labels = FALSE)
+text(tick, par("usr")[3] - 20, names(sort(colMeans(MAE6_sub[sapply(MAE6_sub, is.numeric)]))), srt = 45, xpd = TRUE)
+```
+
+
+```{r}
+pdf("./Figures/sim7_sec_boxplot.pdf", width = 8, height = 6)
+par(mar = c(4, 5.5, 0.8, 0.8)) 
+boxplot(MAE6[c("proposed", "locpol3", "psplines")], ylab="MAEadjusted", cex.axis=1.6, cex.lab=1.7, col = NULL, varwidth = TRUE, boxlwd = 3)
+```
+

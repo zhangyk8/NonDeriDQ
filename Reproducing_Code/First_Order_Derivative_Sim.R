@@ -30,10 +30,13 @@ print(h_opt3)
 h_opt3 = h_opt3*1.01431
 
 qry_range = seq(k_opt3 + 1, n-k_opt3, by = 1)
-Y_deriv_sm3 = LocalPolyReg(Y = deri_est3$Y_deri[qry_range], 
-                           X = deri_est3$U_ord[qry_range], 
-                           xeval = deri_est3$U_ord, h = h_opt3, 
+Y_deriv_sm3 = LocalPolyReg(Y = deri_est3$Y_deri[qry_range],
+                           X = deri_est3$U_ord[qry_range],
+                           xeval = deri_est3$U_ord, h = h_opt3,
                            kern = gaussK, deg = 3, deriv_ord = 0)
+# Y_deriv_sm3 = LocalPolyReg(Y = deri_est3$Y_deri, X = deri_est3$U_ord, 
+#                            xeval = deri_est3$U_ord, h = h_opt3, 
+#                            kern = gaussK, deg = 3, deriv_ord = 0)
 Y_deriv_trans3 = Y_deriv_sm3 * deri_est3$den_ord
 
 MAE_quo = mean(abs(Y_deriv_trans3 - m3Deriv(deri_est3$X_ord))[26:675])
@@ -54,9 +57,12 @@ print(h_opt3o)
 h_opt3o = h_opt3o*1.01431
 
 qry_rangeo = seq(k_opt3o + 1, n-k_opt3o, by = 1)
-Y_deriv_sm3o = LocalPolyReg(Y = deri_est3o$Y_deri[qry_rangeo], 
-                            X = deri_est3o$U_ord[qry_rangeo], xeval = deri_est3o$U_ord, 
+Y_deriv_sm3o = LocalPolyReg(Y = deri_est3o$Y_deri[qry_rangeo],
+                            X = deri_est3o$U_ord[qry_rangeo], xeval = deri_est3o$U_ord,
                             h = h_opt3o, kern = gaussK, deg = 3, deriv_ord = 0)
+# Y_deriv_sm3o = LocalPolyReg(Y = deri_est3o$Y_deri, 
+#                             X = deri_est3o$U_ord, xeval = deri_est3o$U_ord, 
+#                             h = h_opt3o, kern = gaussK, deg = 3, deriv_ord = 0)
 Y_deriv_trans3o = Y_deriv_sm3o * 4/3
 
 MAE_quo_ora = mean(abs(Y_deriv_trans3o - m3Deriv(deri_est3o$X_ord))[26:675])
@@ -98,8 +104,11 @@ print(h_opt4)
 h_opt4 = h_opt4*1.01431
 
 qry_range = seq(k_opt4 + 1, n-k_opt4, by = 1)
-Y_deriv_sm4 = LocalPolyReg(Y = deri_est4$Y_deri[qry_range], X = deri_est4$U_ord[qry_range], 
-                           xeval = deri_est4$U_ord, h = h_opt4, kern = gaussK, deg = 3, deriv_ord = 0)
+# Y_deriv_sm4 = LocalPolyReg(Y = deri_est4$Y_deri[qry_range], X = deri_est4$U_ord[qry_range], 
+#                            xeval = deri_est4$U_ord, h = h_opt4, kern = gaussK, deg = 3, deriv_ord = 0)
+Y_deriv_sm4 = LocalPolyReg(Y = deri_est4$Y_deri, X = deri_est4$U_ord, 
+                           xeval = deri_est4$U_ord, h = h_opt4, kern = gaussK, deg = 3, 
+                           deriv_ord = 0)
 Y_deriv_trans4 = Y_deriv_sm4 * deri_est4$den_ord
 
 MAE_quo = mean(abs(Y_deriv_trans4 - m4Deriv(deri_est4$X_ord))[26:675])
@@ -119,9 +128,12 @@ print(h_opt4o)
 h_opt4o = h_opt4o*1.01431
 
 qry_rangeo = seq(k_opt4o + 1, n-k_opt4o, by = 1)
-Y_deriv_sm4o = LocalPolyReg(Y = deri_est4o$Y_deri[qry_rangeo], 
-                            X = deri_est4o$U_ord[qry_rangeo], xeval = deri_est4o$U_ord, 
+Y_deriv_sm4o = LocalPolyReg(Y = deri_est4o$Y_deri[qry_rangeo],
+                            X = deri_est4o$U_ord[qry_rangeo], xeval = deri_est4o$U_ord,
                             h = h_opt4o, kern = gaussK, deg = 3, deriv_ord = 0)
+# Y_deriv_sm4o = LocalPolyReg(Y = deri_est4o$Y_deri, 
+#                             X = deri_est4o$U_ord, xeval = deri_est4o$U_ord, 
+#                             h = h_opt4o, kern = gaussK, deg = 3, deriv_ord = 0)
 Y_deriv_trans4o = Y_deriv_sm4o * dnorm(deri_est4o$X_ord, mean = 0, sd = 0.5)
 
 

@@ -1,0 +1,125 @@
+---
+title: "Simulation 8 (Smoothing the Data before Taking Discrete Derivatives)"
+author: "Yikun Zhang"
+date: "2023-05-23"
+output: html_document
+---
+
+```{r}
+library(ks)
+library(locpol)
+library(ggplot2)
+library(latex2exp)
+library(pspline)
+
+source('derivative_estimation_quotients.R')
+```
+
+```{r}
+n = 1000
+set.seed(123)
+X_1 = runif(n)
+m_1 = cos(2*pi*X_1)^2 + log(4/3 + X_1)
+eps1 = rnorm(n, mean = 0, sd = 0.1)
+Y_1 = m_1 + eps1
+
+m1Deriv = function(x_qry){
+  res = -2*pi*sin(4*pi*x_qry) + 3/(3*x_qry + 4)
+  return(res)
+}
+
+## Proposed estimator
+U_1 = kcde(X_1, eval.points = X_1, tail.flag = "lower.tail")$estimate
+k_opt1 = OptK(Y = Y_1, U = U_1, k_range = NULL, h = NULL, kern = gaussK)
+# k_opt1 = 8
+print(k_opt1)
+deri_est1 = DerivEstQuotient(Y = Y_1, X = X_1, k = k_opt1)
+
+h_opt1 = RSSBandwidth(Y = deri_est1$Y_deri, U = deri_est1$U_ord, k = k_opt1, 
+                      h_range = seq(0.03, 0.07, by = 0.005), deg = 3)
+print(h_opt1)
+h_opt1 = h_opt1*1.01431
+
+qry_range = seq(k_opt1 + 1, n-k_opt1, by = 1)
+Y_deriv_sm1 = LocalPolyReg(Y = deri_est1$Y_deri[qry_range], 
+                           X = deri_est1$U_ord[qry_range], 
+                           xeval = deri_est1$U_ord, h = h_opt1, 
+                           kern = gaussK, deg = 3, deriv_ord = 0)
+Y_deriv_trans1 = Y_deriv_sm1 * deri_est1$den_ord
+
+# MAE_quo = mean(abs(Y_deriv_trans1 - m1Deriv(deri_est1$X_ord))[26:675])
+# Med_Abs_Err = median(abs(Y_deriv_trans1 - m1Deriv(deri_est1$X_ord)))
+
+
+## Proposed estimator with the oracle data-generating distribution
+U_1o = X_1
+k_opt1o = OptK(Y = Y_1, U = U_1o, k_range = NULL, h = NULL, kern = gaussK)
+# k_opt1o = 8
+print(k_opt1o)
+deri_est1o = DerivEstQuotient(Y = Y_1, X = X_1, k = k_opt1o, U = U_1o)
+
+h_opt1o = RSSBandwidth(Y = deri_est1o$Y_deri, U = deri_est1o$U_ord, k = k_opt1o, 
+                       h_range = seq(0.03, 0.07, by = 0.005), deg = 3)
+print(h_opt1o)
+h_opt1o = h_opt1o*1.01431
+
+qry_rangeo = seq(k_opt1o + 1, n-k_opt1o, by = 1)
+Y_deriv_sm1o = LocalPolyReg(Y = deri_est1o$Y_deri[qry_rangeo], 
+                            X = deri_est1o$U_ord[qry_rangeo], xeval = deri_est1o$U_ord,
+                            h = h_opt1o, kern = gaussK, deg = 3, deriv_ord = 0)
+Y_deriv_trans1o = Y_deriv_sm1o
+
+# MAE_quo_ora = mean(abs(Y_deriv_trans1o - m1Deriv(deri_est1o$X_ord))[26:675])
+# Med_Abs_Err_ora = median(abs(Y_deriv_trans1o - m1Deriv(deri_est1o$X_ord)))
+
+## Adaptive spline estimator
+# library(earth)
+# ada_reg_sp = earth(x = X_1, y = Y_1, degree = 3)$fitted.values[,1]
+# X_1_ord = sort(X_1)
+# ada_reg_sp_ord = ada_reg_sp[order(X_1)]
+# gam_deriv = (ada_reg_sp_ord[2:n] - ada_reg_sp_ord[1:(n-1)])/(X_1_ord[2:n] - X_1_ord[1:(n-1)])
+Y_pspline1 = sm.spline(x = sort(X_1), y = Y_1[order(X_1)], norder = 2)
+Y_psp1 = predict(Y_pspline1, xarg = sort(X_1), nderiv = 0)
+X_1_ord = sort(X_1)
+gam_deriv = (Y_psp1[2:n] - Y_psp1[1:(n-1)])/(X_1_ord[2:n] - X_1_ord[1:(n-1)])
+gam_deriv = (c(0, gam_deriv) + c(gam_deriv, 0))/2
+
+x_qry = seq(min(X_1), max(X_1), length.out = 200)
+True_deriv1 = m1Deriv(x_qry)
+
+ggplot() + geom_point(mapping = aes(x = X_1_ord, y = gam_deriv), size = 1, color = "green") + geom_point(mapping = aes(x = deri_est1$X_ord, y = Y_deriv_trans1), size = 1, color = "red") + geom_line(mapping = aes(x = x_qry, y = True_deriv1), color = "black", size = 1) + theme_bw(base_size = 22) + xlab("X") + ylab(TeX("$m''(x), \\hat{m}''(x)$"))
+```
+
+```{r}
+a_min  = 0.03
+a_max = 0.97
+pdf("./Figures/sim8_deriv_com.pdf", width = 8.5, height = 6.3)
+par(mar = c(4, 5.5, 1, 0.8)) 
+plot(X_1_ord[(X_1_ord > a_min) & (X_1_ord < a_max)], gam_deriv[(X_1_ord > a_min) & (X_1_ord < a_max)], pch=16, xlab = "X", ylab = TeX("$m'(X), \\hat{m}'(X)$"), col="green", cex.lab=2, cex.axis=2, cex=0.7, type="l", lty="dashed", lwd=4, xlim = c(0,1))
+lines(deri_est1$X_ord[(deri_est1$X_ord > a_min) & (deri_est1$X_ord < a_max)], Y_deriv_trans1[(deri_est1$X_ord > a_min) & (deri_est1$X_ord < a_max)], col="red", lty="dashed", lwd=3)
+lines(x_qry[(x_qry > a_min) & (x_qry < a_max)], True_deriv1[(x_qry > a_min) & (x_qry < a_max)], col="black", lwd=3)
+legend(0.81, -3.4, legend=c("gam", "uniform", "kde"), fill=c("green", "red", "black"), cex=1.5)
+```
+
+
+```{r}
+deri_sim1 = read.csv("deri_first_sim1.csv", header = TRUE)
+
+MAE1 = data.frame(gam = deri_sim1[deri_sim1$scenario == "GAM", "MAE_adj"],
+                  kde = deri_sim1[deri_sim1$scenario == "Proposed", "MAE_adj"],
+                  uniform = deri_sim1[deri_sim1$scenario == "Oracle", "MAE_adj"])
+boxplot(MAE1)
+```
+
+```{r}
+pdf("./Figures/sim8_deriv_boxplot.pdf", width = 8, height = 6)
+par(mar = c(4, 5.5, 0.8, 0.8)) 
+boxplot(MAE1[c("gam", "uniform", "kde")], ylab="MAEadjusted", cex.axis=1.6, cex.lab=1.7, col = NULL, varwidth = TRUE, boxlwd = 3)
+```
+
+
+```{r}
+sapply(MAE1, median)
+sapply(MAE1, var)
+```
+

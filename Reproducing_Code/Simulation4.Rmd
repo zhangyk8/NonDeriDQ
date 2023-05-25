@@ -1,0 +1,321 @@
+---
+title: "Simulation 4 (First-Order Derivative Estimation with Monte Carlo Repeated
+  Experiments)"
+author: "Yikun Zhang"
+date: "2023-05-22"
+output: html_document
+---
+
+This file reproduces the simulation study 4 and its associated figure (Figure 6) in Liu and De Brabanter (2020). Besides that, we also conduct some extensive experiments on other kernel-based derivative estimators for our final report.
+
+```{r}
+library(ks)
+library(locpol)
+library(ggplot2)
+library(latex2exp)
+library(pspline)
+
+source('derivative_estimation_quotients.R')
+source('kernel_derivative_estimator.R')
+```
+
+
+```{r}
+n = 700
+set.seed(123)
+X_4 = rnorm(n, mean = 0, sd = 0.5)
+m_4 = X_4 + 2*exp(-16*X_4^2)
+eps4 = rnorm(n, mean = 0, sd = 0.2)
+Y_4 = m_4 + eps4
+
+pdf("./Figures/sim4_raw_rep.pdf", width = 8, height = 6)
+par(mar = c(4, 4.8, 0.2, 0.3))  
+plot(X_4, Y_4, xlab = "X", ylab = "Y", cex.lab=2, cex.axis=2)
+```
+
+```{r}
+pdf("./Figures/sim4_raw.pdf", width = 8, height = 6)
+par(mar = c(4, 4.8, 0.2, 0.3))  
+plot(X_4, Y_4, xlab = "X", ylab = "Y", cex.lab=2, cex.axis=2)
+lines(sort(X_4), m_4[order(X_4)], col="red", lwd=5)
+legend(0.01, -1.01, legend=c("Raw data for a random run", TeX("True function $m(X)$")),
+       fill=c("black", "red"), cex=1.5)
+```
+
+```{r}
+m4Deriv = function(x){
+  res = 1 - 64*x*exp(-16*x^2)
+  return(res)
+}
+
+n = 700
+B = 100
+MAE_locpol2 = numeric(B)
+MAE_locpol3 = numeric(B)
+MAE_locpol4 = numeric(B)
+MAE_psp = numeric(B)
+MAE_GM = numeric(B)
+MAE_NWVar = numeric(B)
+
+Med_AbsErr_locpol2 = numeric(B)
+Med_AbsErr_locpol3 = numeric(B)
+Med_AbsErr_locpol4 = numeric(B)
+Med_AbsErr_psp = numeric(B)
+Med_AbsErr_GM = numeric(B)
+Med_AbsErr_NWVar = numeric(B)
+set.seed(123)
+start_time = Sys.time()
+for(b in 1:B){
+  X_4 = rnorm(n, mean = 0, sd = 0.5)
+  m_4 = X_4 + 2*exp(-16*X_4^2)
+  eps4 = rnorm(n, mean = 0, sd = 0.2)
+  Y_4 = m_4 + eps4
+
+  # locpol
+  dat4 = data.frame(X = X_4, Y = Y_4)
+  Y_locpol2 = locpol(Y ~ X, data = dat4, kernel = gaussK, xeval = X_4, deg = 2)
+  Y_locpol3 = locpol(Y ~ X, data = dat4, kernel = gaussK, xeval = X_4, deg = 3)
+  Y_locpol4 = locpol(Y ~ X, data = dat4, kernel = gaussK, xeval = X_4, deg = 4)
+
+  MAE_locpol2[b] = mean(abs(Y_locpol2$lpFit$Y1 - m4Deriv(Y_locpol2$lpFit$X))[26:675])
+  MAE_locpol3[b] = mean(abs(Y_locpol3$lpFit$Y1 - m4Deriv(Y_locpol3$lpFit$X))[26:675])
+  MAE_locpol4[b] = mean(abs(Y_locpol4$lpFit$Y1 - m4Deriv(Y_locpol4$lpFit$X))[26:675])
+
+  Med_AbsErr_locpol2[b] = median(abs(Y_locpol2$lpFit$Y1 - m4Deriv(Y_locpol2$lpFit$X)))
+  Med_AbsErr_locpol3[b] = median(abs(Y_locpol3$lpFit$Y1 - m4Deriv(Y_locpol3$lpFit$X)))
+  Med_AbsErr_locpol4[b] = median(abs(Y_locpol4$lpFit$Y1 - m4Deriv(Y_locpol4$lpFit$X)))
+
+  # pspline
+  Y_pspline = sm.spline(x = sort(X_4), y = Y_4[order(X_4)], norder = 2)
+  Y_psp_deriv = predict(Y_pspline, xarg = sort(X_4), nderiv = 1)
+
+  MAE_psp[b] = mean(abs(Y_psp_deriv - m4Deriv(sort(X_4)))[26:675])
+  Med_AbsErr_psp[b] = median(abs(Y_psp_deriv - m4Deriv(sort(X_4))))
+
+  # Gasser-Muller derivative estimator
+  Y_gm_deriv = GasserMullerEst(Y_4, X_4, xeval = sort(X_4), h = NULL, kern = gaussK, deriv_ord = 1)
+  MAE_GM[b] = mean(abs(Y_gm_deriv - m4Deriv(sort(X_4)))[26:675])
+  Med_AbsErr_GM[b] = median(abs(Y_gm_deriv - m4Deriv(sort(X_4))))
+
+  # Variant of Nadaraya-Watson derivative estimator
+  Y_varNW_deriv = NWVarEst(Y_4, X_4, xeval = sort((X_4)), h_reg = NULL, h_den = NULL, kern = gaussDeriv, deriv_ord = 1)
+  MAE_NWVar[b] = mean(abs(Y_varNW_deriv - m4Deriv(sort(X_4)))[26:675])
+  Med_AbsErr_NWVar[b] = median(abs(Y_varNW_deriv - m4Deriv(sort(X_4))))
+}
+print(Sys.time() - start_time)
+
+MAE4 = data.frame(locpol2 = MAE_locpol2, locpol3 = MAE_locpol3, locpol4 = MAE_locpol4, psplines = MAE_psp, Gasser_Muller = MAE_GM, NW_Var = MAE_NWVar)
+write.csv(MAE4, "./MAE4.csv", row.names = FALSE)
+
+Med_AbsErr4 = data.frame(locpol2 = Med_AbsErr_locpol2,
+                         locpol3 = Med_AbsErr_locpol3,
+                         locpol4 = Med_AbsErr_locpol4, psplines = Med_AbsErr_psp,
+                         Gasser_Muller = Med_AbsErr_GM, NW_Var = Med_AbsErr_NWVar)
+write.csv(Med_AbsErr4, "./Med_AbsErr4.csv", row.names = FALSE)
+```
+
+```{r}
+MAE4 = read.csv("./MAE4.csv", header = TRUE)
+MAE_prop4 = read.csv("./deri_first_sim4_new.csv", header = TRUE)
+MAE4$proposed = MAE_prop4[MAE_prop4$scenario == "Proposed", "MAE_adj"]
+MAE4$proposed_oracle = MAE_prop4[MAE_prop4$scenario == "Oracle", "MAE_adj"]
+
+boxplot(MAE4, ylab="MAEadjusted")
+```
+
+```{r}
+pdf("./Figures/sim4_deriv_boxplot_full.pdf", width = 8, height = 6)
+par(mar = c(5, 5, 0.8, 0.8))
+boxplot(MAE4[order(colMeans(MAE4[sapply(MAE4, is.numeric)]))], ylab="MAEadjusted", cex.axis=1.6, cex.lab=1.7, col = NULL, varwidth = TRUE, boxlwd = 2, xaxt = "n")
+tick = seq_along(names(sort(colMeans(MAE4[sapply(MAE4, is.numeric)]))))
+axis(1, at = tick, labels = FALSE)
+text(tick, par("usr")[3] - 0.8, names(sort(colMeans(MAE4[sapply(MAE4, is.numeric)]))), srt = 45, xpd = TRUE)
+```
+
+```{r}
+MAE4 = read.csv("./MAE4.csv", header = TRUE)
+MAE_prop4 = read.csv("./deri_first_sim4_new.csv", header = TRUE)
+MAE4$kde = MAE_prop4[MAE_prop4$scenario == "Proposed", "MAE_adj"]
+MAE4$normal = MAE_prop4[MAE_prop4$scenario == "Oracle", "MAE_adj"]
+
+pdf("./Figures/sim4_deriv_boxplot.pdf", width = 8, height = 6)
+par(mar = c(4, 5.5, 0.8, 0.8)) 
+boxplot(MAE4[c("kde", "locpol2", "psplines", "normal")], ylab="MAEadjusted", cex.axis=1.6, cex.lab=1.7, col = NULL, varwidth = TRUE, boxlwd = 3)
+```
+
+
+```{r}
+Med_AbsErr4 = read.csv("./Med_AbsErr4.csv", header = TRUE)
+MAE_prop4 = read.csv("./deri_first_sim4.csv", header = TRUE)
+Med_AbsErr4$proposed_kde = MAE_prop4[MAE_prop4$scenario == "Proposed", "Med_Abs_Err"]
+Med_AbsErr4$proposed_normal = MAE_prop4[MAE_prop4$scenario == "Oracle", "Med_Abs_Err"]
+
+boxplot(Med_AbsErr4, ylab="Median Absolute Error")
+```
+
+```{r}
+n = 1000
+set.seed(123)
+X_4 = rnorm(n, mean = 0, sd = 0.5)
+m_4 = X_4 + 2*exp(-16*X_4^2)
+eps4 = rnorm(n, mean = 0, sd = 0.2)
+Y_4 = m_4 + eps4
+```
+
+```{r}
+pdf("./Figures/sim4_raw1000.pdf", width = 8, height = 6)
+par(mar = c(4, 4.8, 0.2, 0.3))  
+plot(X_4, Y_4, xlab = "X", ylab = "Y", cex.lab=2, cex.axis=2)
+lines(sort(X_4), m_4[order(X_4)], col="red", lwd=5)
+legend(0.01, -1.2, legend=c("Raw data for a random run", TeX("True function $m(X)$")),
+       fill=c("black", "red"), cex=1.5)
+```
+
+```{r}
+U_4 = kcde(X_4, eval.points = X_4, tail.flag = "lower.tail")$estimate
+k_opt4 = OptK(Y = Y_4, U = U_4, k_range = seq(1, 499, by = 1), h = NULL, kern = gaussK)
+# k_opt4 = 26
+print(k_opt4)
+deri_est4 = DerivEstQuotient(Y = Y_4, X = X_4, k = k_opt4)
+
+h_opt4 = RSSBandwidth(Y = deri_est4$Y_deri, U = deri_est4$U_ord, k = k_opt4, h_range = seq(0.04, 0.1, by = 0.005), deg = 3)
+print(h_opt4)
+h_opt4 = h_opt4*1.01431
+
+qry_range = seq(k_opt4 + 1, n-k_opt4, by = 1)
+u_qry = seq(min(deri_est4$U_ord[qry_range]), max(deri_est4$U_ord[qry_range]), length.out = 100)
+deri_true4 = 1 - 64*u_qry*exp(-16*u_qry^2)
+
+Y_deriv_sm4 = LocalPolyReg(Y = deri_est4$Y_deri, X = deri_est4$U_ord, xeval = deri_est4$U_ord, h = h_opt4, kern = gaussK, deg = 3, deriv_ord = 0)
+```
+
+```{r}
+pdf("./Figures/sim4_deriv_u.pdf", width = 8.5, height = 6.3)
+par(mar = c(4, 6.4, 0.3, 0.8))  
+plot(deri_est4$U_ord[qry_range], deri_est4$Y_deri[qry_range], col="blue", pch=20, xlab = "U", ylab = TeX("$\\hat{Y}^{(1)}, \\hat{r}^{(1)}(u)$"), cex.lab=2, cex.axis=2)
+lines(deri_est4$U_ord[qry_range], y = Y_deriv_sm4[qry_range], col="red", lwd=5, lty="dashed")
+legend(0, -6.26, legend=c(TeX("Noisy $\\hat{r}^{(1)}(x)$"), TeX("Smoothed $\\hat{r}^{(1)}(x)$")), fill=c("blue", "red"), cex=1.5)
+```
+
+
+```{r}
+Y_deriv_trans4 = Y_deriv_sm4 * deri_est4$den_ord
+Y_deriv_noisy4 = deri_est4$Y_deri * deri_est4$den_ord
+
+x_qry = seq(min(deri_est4$X_ord[qry_range]), max(deri_est4$X_ord[qry_range]), length.out = 100)
+True_deriv4 = 1 - 64*x_qry*exp(-16*x_qry^2)
+
+pdf("./Figures/sim4_deriv_x.pdf", width = 8, height = 6)
+par(mar = c(4, 5.5, 0.2, 1.3))
+plot(deri_est4$X_ord[qry_range], Y_deriv_noisy4[qry_range], pch=16, xlab = "X", ylab = TeX("$m'(x), \\hat{m}'(x)$"), col="blue", cex.lab=2, cex.axis=2, cex=0.7)
+lines(deri_est4$X_ord[qry_range], Y_deriv_trans4[qry_range], pch=16, col="red", cex=0.7, lty="dashed", lwd=5)
+lines(x_qry, True_deriv4, col="black", lwd=5)
+legend(-0.935, -3.9, legend=c(TeX("Noisy $\\hat{m}'(x)$"), TeX("Smoothed $\\hat{m}'(x)$"), "True derivative"), fill=c("blue", "red", "black"), cex=1.5)
+```
+
+## Second-Order Derivative Estimation
+
+```{r}
+m4SecDeriv = function(x){
+  res = 64*(32*x^2-1)*exp(-16*x^2)
+  return(res)
+}
+
+n = 700
+B = 100
+MAE_locpol_sec3 = numeric(B)
+MAE_locpol_sec4 = numeric(B)
+MAE_locpol_sec5 = numeric(B)
+MAE_psp_sec = numeric(B)
+MAE_GM_sec = numeric(B)
+MAE_NWVar_sec = numeric(B)
+
+Med_AbsErr_locpol_sec3 = numeric(B)
+Med_AbsErr_locpol_sec4 = numeric(B)
+Med_AbsErr_locpol_sec5 = numeric(B)
+Med_AbsErr_psp_sec = numeric(B)
+Med_AbsErr_GM_sec = numeric(B)
+Med_AbsErr_NWVar_sec = numeric(B)
+
+set.seed(123)
+start_time = Sys.time()
+for(b in 1:B){
+  X_4 = rnorm(n, mean = 0, sd = 0.5)
+  m_4 = X_4 + 2*exp(-16*X_4^2)
+  eps4 = rnorm(n, mean = 0, sd = 0.2)
+  Y_4 = m_4 + eps4
+
+  # locpol
+  dat4 = data.frame(X = X_4, Y = Y_4)
+  Y_locpol_sec3 = locpol(Y ~ X, data = dat4, kernel = gaussK, xeval = X_4, deg = 3)
+  Y_locpol_sec4 = locpol(Y ~ X, data = dat4, kernel = gaussK, xeval = X_4, deg = 4)
+  Y_locpol_sec5 = locpol(Y ~ X, data = dat4, kernel = gaussK, xeval = X_4, deg = 5)
+
+  MAE_locpol_sec3[b] = mean(abs(Y_locpol_sec3$lpFit$Y2 - m4SecDeriv(Y_locpol_sec3$lpFit$X))[31:670])
+  MAE_locpol_sec4[b] = mean(abs(Y_locpol_sec4$lpFit$Y2 - m4SecDeriv(Y_locpol_sec3$lpFit$X))[31:670])
+  MAE_locpol_sec5[b] = mean(abs(Y_locpol_sec5$lpFit$Y2 - m4SecDeriv(Y_locpol_sec5$lpFit$X))[31:670])
+
+  Med_AbsErr_locpol_sec3[b] = median(abs(Y_locpol_sec3$lpFit$Y2 - m4SecDeriv(Y_locpol_sec3$lpFit$X)))
+  Med_AbsErr_locpol_sec4[b] = median(abs(Y_locpol_sec4$lpFit$Y2 - m4SecDeriv(Y_locpol_sec3$lpFit$X)))
+  Med_AbsErr_locpol_sec5[b] = median(abs(Y_locpol_sec5$lpFit$Y2 - m4SecDeriv(Y_locpol_sec5$lpFit$X)))
+
+  # pspline
+  Y_pspline_sec4 = sm.spline(x = sort(X_4), y = Y_4[order(X_4)], norder = 2)
+  Y_psp_sec4 = predict(Y_pspline_sec4, xarg = sort(X_4), nderiv = 2)
+
+  MAE_psp_sec[b] = mean(abs(Y_psp_sec4 - m4SecDeriv(sort(X_4)))[31:670])
+  Med_AbsErr_psp_sec[b] = median(abs(Y_psp_sec4 - m4SecDeriv(sort(X_4))))
+
+  # Gasser-Muller derivative estimator
+  Y_gm_sec = GasserMullerEst(Y_4, X_4, xeval=sort(X_4), h=NULL, kern=gaussDeriv, deriv_ord=2)
+  MAE_GM_sec[b] = mean(abs(Y_gm_sec - m4SecDeriv(sort(X_4)))[31:670])
+  Med_AbsErr_GM_sec[b] = median(abs(Y_gm_sec - m4SecDeriv(sort(X_4))))
+
+  # Variant of Nadaraya-Watson derivative estimator
+  Y_varNW_sec = NWVarEst(Y_4, X_4, xeval=sort(X_4), h_reg = NULL, h_den = NULL, kern = gaussDeriv2, deriv_ord = 2)
+  MAE_NWVar_sec[b] = mean(abs(Y_varNW_sec - m4SecDeriv(sort(X_4)))[31:670])
+  Med_AbsErr_NWVar_sec[b] = median(abs(Y_varNW_sec - m4SecDeriv(sort(X_4))))
+}
+print(Sys.time() - start_time)
+#
+MAE4_sec = data.frame(locpol3 = MAE_locpol_sec3, locpol4 = MAE_locpol_sec4, locpol5 = MAE_locpol_sec5, psplines = MAE_psp_sec, Gasser_Muller = MAE_GM_sec, NW_Var = MAE_NWVar_sec)
+write.csv(MAE4_sec, "./MAE4_sec.csv", row.names = FALSE)
+
+Med_AbsErr4_sec = data.frame(locpol3 = Med_AbsErr_locpol_sec3,
+                         locpol4 = Med_AbsErr_locpol_sec4,
+                         locpol5 = Med_AbsErr_locpol_sec5,
+                         psplines = Med_AbsErr_psp_sec,
+                         Gasser_Muller = Med_AbsErr_GM_sec,
+                         NW_Var = Med_AbsErr_NWVar_sec)
+write.csv(Med_AbsErr4_sec, "./Med_AbsErr4_sec.csv", row.names = FALSE)
+```
+
+```{r}
+MAE4_sec = read.csv("./MAE4_sec.csv", header = TRUE)
+MAE_prop_sec4 = read.csv("./deri_second_sim4_new.csv", header = TRUE)
+MAE4_sec$proposed = MAE_prop_sec4[MAE_prop_sec4$scenario == "Proposed", "MAE_adj"]
+MAE4_sec$proposed_oracle = MAE_prop_sec4[MAE_prop_sec4$scenario == "Oracle", "MAE_adj"]
+# boxplot(MAE4_sec[c("locpol3", "locpol4", "locpol5", "psplines", "Gasser_Muller")])
+boxplot(MAE4_sec)
+```
+
+```{r}
+pdf("./Figures/sim4_sec_boxplot_full.pdf", width = 8, height = 6)
+par(mar = c(5, 5, 0.8, 0.8))
+boxplot(MAE4_sec[order(colMeans(MAE4_sec[sapply(MAE4_sec, is.numeric)]))], ylab="MAEadjusted", cex.axis=1.6, cex.lab=1.7, col = NULL, varwidth = TRUE, boxlwd = 2, xaxt = "n")
+tick = seq_along(names(sort(colMeans(MAE4_sec[sapply(MAE4_sec, is.numeric)]))))
+axis(1, at = tick, labels = FALSE)
+text(tick, par("usr")[3] - 3, names(sort(colMeans(MAE4_sec[sapply(MAE4_sec, is.numeric)]))), srt = 45, xpd = TRUE)
+```
+
+
+```{r}
+MAE4_sec = MAE4_sec[c("locpol3", "locpol4", "locpol5", "psplines", "proposed", "proposed_oracle")]
+pdf("./Figures/sim4_sec_boxplot_sub.pdf", width = 8, height = 6)
+par(mar = c(5, 5, 0.8, 0.8))
+boxplot(MAE4_sec[order(colMeans(MAE4_sec[sapply(MAE4_sec, is.numeric)]))], ylab="MAEadjusted", cex.axis=1.6, cex.lab=1.7, col = NULL, varwidth = TRUE, boxlwd = 2, xaxt = "n")
+tick = seq_along(names(sort(colMeans(MAE4_sec[sapply(MAE4_sec, is.numeric)]))))
+axis(1, at = tick, labels = FALSE)
+text(tick, par("usr")[3] - 3, names(sort(colMeans(MAE4_sec[sapply(MAE4_sec, is.numeric)]))), srt = 45, xpd = TRUE)
+```
+

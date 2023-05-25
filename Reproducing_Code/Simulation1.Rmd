@@ -65,6 +65,15 @@ ggplot() + geom_point(mapping = aes(x = deri_est1$U_ord[qry_range], y = deri_est
 ```
 
 ```{r}
+pdf("./Figures/sim1_deriv_u26.pdf", width = 8.5, height = 6.3)
+par(mar = c(4, 6, 0.2, 1))  
+plot(deri_est1$U_ord[qry_range], deri_est1$Y_deri[qry_range], col="blue", pch=20, xlab = "U", ylab = TeX("$\\hat{Y}^{(1)}, \\hat{r}^{(1)}(u)$"), cex.lab=2, cex.axis=2)
+lines(deri_est1$U_ord[qry_range], y = Y_deriv_sm1[qry_range], col="red", lwd=5, lty="dashed")
+legend(-0.01, 9.5, legend=c(TeX("Noisy $\\hat{r}^{(1)}(x)$"), TeX("Smoothed $\\hat{r}^{(1)}(x)$")), fill=c("blue", "red"), cex=1.5)
+```
+
+
+```{r}
 Y_deriv_trans1 = Y_deriv_sm1 * deri_est1$den_ord
 Y_deriv_noisy1 = deri_est1$Y_deri * deri_est1$den_ord
 
@@ -73,10 +82,10 @@ True_deriv1 = -2*pi*sin(4*pi*x_qry) + 3/(3*x_qry+4)
 
 pdf("./Figures/sim1_deriv_x.pdf", width = 8, height = 6)
 par(mar = c(4, 5.5, 0.2, 1))
-plot(deri_est1$X_ord[qry_range], Y_deriv_noisy1[qry_range], pch=16, xlab = "X", ylab = TeX("$m'(x), \\hat{m}'(x)$"), col="green", cex.lab=2, cex.axis=2, cex=0.7)
-points(deri_est1$X_ord[qry_range], Y_deriv_trans1[qry_range], pch=16, col="blue", cex=0.7)
+plot(deri_est1$X_ord[qry_range], Y_deriv_noisy1[qry_range], pch=16, xlab = "X", ylab = TeX("$m'(x), \\hat{m}'(x)$"), col="blue", cex.lab=2, cex.axis=2, cex=0.7)
+lines(deri_est1$X_ord[qry_range], Y_deriv_trans1[qry_range], pch=16, col="red", cex=0.7, lty="dashed", lwd=5)
 lines(x_qry, True_deriv1, col="black", lwd=5)
-legend(-0.03, 9.7, legend=c(TeX("Noisy $\\hat{m}'(x)$"), TeX("Smoothed $\\hat{m}'(x)$"), "True derivative"), fill=c("green", "blue", "black"), cex=1.5)
+legend(-0.03, 9.7, legend=c(TeX("Noisy $\\hat{m}'(x)$"), TeX("Smoothed $\\hat{m}'(x)$"), "True derivative"), fill=c("blue", "red", "black"), cex=1.5)
 ```
 
 

@@ -1,0 +1,117 @@
+---
+title: "Simulation 5 (Second-Order Derivative Estimation)"
+author: "Yikun Zhang"
+date: "2023-05-22"
+output: html_document
+---
+
+This file reproduces the simulation study 5 and its associated figures (Figure 7a, Figure 8a, 9a) in Liu and De Brabanter (2020).
+
+```{r}
+library(ks)
+library(locpol)
+library(ggplot2)
+library(latex2exp)
+
+source('derivative_estimation_quotients.R')
+```
+
+```{r}
+n = 1000
+set.seed(123)
+X_1 = runif(n)
+m_1 = cos(2*pi*X_1)^2 + log(4/3 + X_1)
+eps1 = rnorm(n, mean = 0, sd = 0.1)
+Y_1 = m_1 + eps1
+```
+
+
+```{r}
+U_1 = kcde(X_1, eval.points = X_1, tail.flag = "lower.tail")$estimate
+k_opt1 = OptK(Y = Y_1, U = U_1, k_range = seq(1, 499, by = 1), h = NULL, kern = gaussK)
+k_opt1 = 26
+# print(k_opt1)
+deri_est1 = DerivEstQuotient(Y = Y_1, X = X_1, k = k_opt1)
+
+h_opt1 = RSSBandwidth(Y = deri_est1$Y_deri, U = deri_est1$U_ord, k = k_opt1, h_range = seq(0.04, 0.1, by = 0.005), deg = 3)
+print(h_opt1)
+h_opt1 = h_opt1*1.01431
+
+qry_range = seq(k_opt1 + 1, n-k_opt1, by = 1)
+u_qry = seq(min(deri_est1$U_ord[qry_range]), max(deri_est1$U_ord[qry_range]), length.out = 100)
+deri_true1 = -2*pi*sin(4*pi*u_qry) + 3/(3*u_qry + 4)
+
+Y_deriv_sm1 = LocalPolyReg(Y = deri_est1$Y_deri, X = deri_est1$U_ord, xeval = deri_est1$U_ord, h = h_opt1, kern = gaussK, deg = 3, deriv_ord = 0)
+```
+
+
+
+```{r}
+U_1 = kcde(X_1, eval.points = X_1, tail.flag = "lower.tail")$estimate
+k_opt_2d1 = OptK1K2(Y = Y_1, U = U_1, k1_range = seq(1, 100, by = 1), k2_range = seq(1, 100, by = 1), h = NULL, kern = gaussK)
+# k_opt_2d1 = list("k1" = 42, "k2" = 23)
+print(k_opt_2d1)
+deri_sec1 = SecondDerivEstQuotient(Y = Y_1, X = X_1, k1 = k_opt_2d1$k1, k2 = k_opt_2d1$k2)
+
+h_opt_2d1 = RSSBandwidth(Y = deri_sec1$Y_sec, U = deri_sec1$U_ord, k = k_opt_2d1$k1 + k_opt_2d1$k2, h_range = seq(0.05, 0.1, by = 0.005), deg = 3)
+print(h_opt_2d1)
+h_opt_2d1 = h_opt_2d1*1.01431
+
+u_qry = seq(min(deri_sec1$U_ord), max(deri_sec1$U_ord), length.out = 100)
+True_sec1 = -8*(pi^2)*cos(4*pi*u_qry) - 9/((3*u_qry+4)^2)
+
+qry_range = seq(k_opt_2d1$k1 + k_opt_2d1$k2 + 1, 1000 - k_opt_2d1$k1 - k_opt_2d1$k2, by = 1)
+Y_deriv_sm11 = LocalPolyReg(Y = deri_est1$Y_deri[qry_range], X = deri_est1$U_ord[qry_range], xeval = deri_est1$U_ord, h = h_opt1, kern = gaussK, deg = 3, deriv_ord = 0)
+Y_sec_sm1 = LocalPolyReg(Y = deri_sec1$Y_sec[qry_range], X = deri_sec1$U_ord[qry_range], xeval = deri_sec1$U_ord, h = h_opt_2d1, kern = gaussK, deg = 3, deriv_ord = 0)
+```
+
+
+```{r}
+Y_sec_trans1 = Y_sec_sm1 * deri_sec1$den_ord^2 + Y_deriv_sm11 * deri_sec1$den_deriv_ord
+Y_sec_raw1 = deri_sec1$Y_sec * deri_sec1$den_ord^2 + deri_est1$Y_deri * deri_sec1$den_deriv_ord
+
+x_qry = seq(min(deri_sec1$X_ord[qry_range]), max(deri_sec1$X_ord[qry_range]), length.out = 100)
+True_sec1 = -8*(pi^2)*cos(4*pi*x_qry) - 9/((3*x_qry+4)^2)
+
+ggplot() + geom_point(mapping = aes(x = deri_sec1$X_ord[qry_range], y = Y_sec_raw1[qry_range]), size = 0.7, color = "blue") + geom_point(mapping = aes(x = deri_sec1$X_ord[qry_range], y = Y_sec_trans1[qry_range]), size = 1, color = "green") + geom_line(mapping = aes(x = x_qry, y = True_sec1), color = "red", linetype = "dashed", size = 1) + theme_bw(base_size = 22) + xlab("X") + ylab(TeX("$m''(x), \\hat{m}''(x)$"))
+```
+
+
+```{r}
+pdf("./Figures/sim5_deriv.pdf", width = 8, height = 6)
+par(mar = c(4, 5.5, 0.2, 1))
+plot(deri_sec1$X_ord[qry_range], Y_sec_raw1[qry_range], pch=16, xlab = "X", ylab = TeX("$m''(x), \\hat{m}''(x)$"), col="blue", cex.lab=2, cex.axis=2, cex=0.7)
+lines(deri_sec1$X_ord[qry_range], y = Y_sec_trans1[qry_range], col="red", lty="dashed", lwd=5)
+lines(x_qry, True_sec1, col="black", lwd=5)
+legend(0.6, -47, legend=c(TeX("Noisy $\\hat{m}''(x)$"), TeX("Smoothed $\\hat{m}''(x)$"), TeX("True $m''(x)$")), fill=c("blue", "red", "black"), cex=1.5)
+```
+
+
+```{r}
+x_qry = seq(min(X_1)+0.06, max(X_1) -0.06, length.out = 200)
+True_sec1 = -8*(pi^2)*cos(4*pi*x_qry) - 9/((3*x_qry+4)^2)
+
+# locpol
+dat1 = data.frame(X = X_1, Y = Y_1)
+Y_locpol_sec1 = locpol(Y ~ X, data = dat1, kernel = gaussK, xeval = X_1, deg = 3)
+
+# pspline
+Y_pspline_sec1 = sm.spline(x = sort(X_1), y = Y_1[order(X_1)], norder = 2)
+Y_psp_deriv_sec1 = predict(Y_pspline_sec1, xarg = X_1, nderiv = 2)
+
+qry_range = seq(k_opt_2d1$k1 + k_opt_2d1$k2 + 1, 1000 - k_opt_2d1$k1 - k_opt_2d1$k2, by = 1)
+
+ggplot() + geom_point(mapping = aes(x = Y_locpol_sec1$lpFit$X, y = Y_locpol_sec1$lpFit$Y2), size = 1, color = "green") + geom_point(mapping = aes(x = X_1, y = Y_psp_deriv_sec1[,1]), size = 0.7, color = "blue") + geom_point(mapping = aes(x = deri_sec1$X_ord, y = Y_sec_trans1), size = 1, color = "red") + geom_line(mapping = aes(x = x_qry, y = True_sec1), color = "black", size = 1) + theme_bw(base_size = 22) + xlab("X") + ylab(TeX("$m''(x), \\hat{m}''(x)$")) + xlim(0.05, 0.95) + ylim(-100, 100)
+```
+
+```{r}
+a_min = min(X_1)+0.07
+a_max = max(X_1) -0.07
+pdf("./Figures/sim5_deriv_com.pdf", width = 8, height = 6)
+par(mar = c(4, 5.5, 0.2, 1))
+plot(deri_sec1$X_ord[(deri_sec1$X_ord > a_min) & (deri_sec1$X_ord < a_max)], y = Y_sec_trans1[(deri_sec1$X_ord > a_min) & (deri_sec1$X_ord < a_max)], pch=16, xlab = "X", ylab = TeX("$m''(x), \\hat{m}''(x)$"), col="red", cex.lab=2, cex.axis=2, cex=0.7, type="l", lty="dashed", lwd=5, ylim = c(-80, 80), xlim = c(0, 1))
+lines(Y_locpol_sec1$lpFit$X[(Y_locpol_sec1$lpFit$X > a_min) & (Y_locpol_sec1$lpFit$X< a_max)], Y_locpol_sec1$lpFit$Y2[(Y_locpol_sec1$lpFit$X > a_min) & (Y_locpol_sec1$lpFit$X< a_max)], col="green", lty="dashed", lwd=5)
+lines(x_qry, True_sec1, col="black", lwd=5)
+legend(0.63, -47, legend=c(TeX("Proposed $\\hat{m}''(x)$"), "locpol3", TeX("True $m''(x)$")), fill=c("red", "green", "black"), cex=1.5)
+```
+
