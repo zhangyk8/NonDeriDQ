@@ -5,6 +5,8 @@ date: "2023-05-06"
 output: html_document
 ---
 
+This file contains my extended real-world application of the proposed derivative estimator to the state-level COVID-19 case rate data.
+
 ```{r}
 library(covidcast)
 library(modeltools)
@@ -104,9 +106,9 @@ print(max(Y_deriv_trans))
 pdf("./Figures/covid_deriv_com.pdf", width = 8.5, height = 6.3)
 par(mar = c(4, 5.5, 0.8, 0.8)) 
 plot(case_rates_sub$time_value, Y_deriv_trans, pch=16, xlab = "Date", ylab = TeX("Case Rates Per 100,000 People"), col="red", cex.lab=2, cex.axis=2, cex=0.7, type="l", lwd=4, ylim=c(-7, 5))
-lines(case_rates_sub$time_value, Y_locpol2$lpFit$Y1, col="orange", lwd=3)
 lines(x = case_rates_sub$time_value, y = Y_psp_deriv, col="blue", lwd=3)
-abline(h = max(Y_deriv_trans), col="black", lty="dashed", lwd = 3)
-legend("bottomleft", legend=c("Proposed Estimator", "Locpol with p=2", "Cubic psplines"), fill=c("red", "orange", "blue", "black"), cex=1.5)
+lines(case_rates_sub$time_value, Y_locpol2$lpFit$Y1, col="orange", lwd=3)
+abline(h = max(Y_deriv_trans), col="black", lty="dashed", lwd = 4)
+legend("bottomleft", legend=c("Proposed estimator", "Locpol with p=2", "Cubic psplines", "Max rates for the proposed estimator"), fill=c("red", "orange", "blue", "black"), cex=1.5)
 ```
 
