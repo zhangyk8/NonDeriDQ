@@ -203,6 +203,15 @@ MAE6$proposed_oracle = MAE_prop6[MAE_prop6$scenario == "Oracle", "MAE_adj"]
 boxplot(MAE6[c("locpol3", "locpol4", "locpol5", "psplines", "proposed", "proposed_oracle")], ylab="MAEadjusted")
 ```
 
+```{r}
+Med_AbsErr6 = read.csv("./Med_AbsErr6.csv", header = TRUE)
+MAE_prop6 = read.csv("./deri_second_sim6_new.csv", header = TRUE)
+Med_AbsErr6$proposed = MAE_prop6[MAE_prop6$scenario == "Proposed", "Med_Abs_Err"]
+Med_AbsErr6$proposed_unif = MAE_prop6[MAE_prop6$scenario == "Oracle", "Med_Abs_Err"]
+
+boxplot(Med_AbsErr6, ylab="Median Absolute Error")
+```
+
 
 ```{r}
 pdf("./Figures/sim7_sec_boxplot_full.pdf", width = 8, height = 6)
@@ -228,5 +237,16 @@ text(tick, par("usr")[3] - 20, names(sort(colMeans(MAE6_sub[sapply(MAE6_sub, is.
 pdf("./Figures/sim7_sec_boxplot.pdf", width = 8, height = 6)
 par(mar = c(4, 5.5, 0.8, 0.8)) 
 boxplot(MAE6[c("proposed", "locpol3", "psplines")], ylab="MAEadjusted", cex.axis=1.6, cex.lab=1.7, col = NULL, varwidth = TRUE, boxlwd = 3)
+```
+
+```{r}
+Med_AbsErr6$proposed_oracle = Med_AbsErr6$proposed_unif
+Med_AbsErr6_sub = Med_AbsErr6[c("locpol3", "locpol4", "locpol5", "psplines", "proposed", "proposed_oracle")]
+pdf("./Figures/sim7_sec_boxplot_MedAbs_sub.pdf", width = 8, height = 6)
+par(mar = c(5, 5, 0.8, 0.8))
+boxplot(Med_AbsErr6_sub[order(colMeans(Med_AbsErr6_sub[sapply(Med_AbsErr6_sub, is.numeric)]))], ylab="Median Absolute Error", cex.axis=1.6, cex.lab=1.7, col = NULL, varwidth = TRUE, boxlwd = 2, xaxt = "n")
+tick = seq_along(names(sort(colMeans(Med_AbsErr6_sub[sapply(Med_AbsErr6_sub, is.numeric)]))))
+axis(1, at = tick, labels = FALSE)
+text(tick, par("usr")[3] - 20, names(sort(colMeans(Med_AbsErr6_sub[sapply(Med_AbsErr6_sub, is.numeric)]))), srt = 45, xpd = TRUE)
 ```
 

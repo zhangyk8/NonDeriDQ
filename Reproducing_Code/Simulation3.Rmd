@@ -192,6 +192,7 @@ text(tick, par("usr")[3] - 1.1, names(sort(colMeans(MAE3[sapply(MAE3, is.numeric
 
 
 ```{r}
+MAE3$proposed_unif = MAE3$proposed_oracle
 pdf("./Figures/sim3_deriv_boxplot.pdf", width = 8, height = 6)
 par(mar = c(4, 5.5, 0.8, 0.8)) 
 boxplot(MAE3[c("proposed", "locpol2", "psplines", "proposed_unif")], ylab="MAEadjusted", cex.axis=1.6, cex.lab=1.7, col = NULL, varwidth = TRUE, boxlwd = 3)
@@ -204,5 +205,16 @@ Med_AbsErr3$proposed = MAE_prop3[MAE_prop3$scenario == "Proposed", "Med_Abs_Err"
 Med_AbsErr3$proposed_unif = MAE_prop3[MAE_prop3$scenario == "Oracle", "Med_Abs_Err"]
 
 boxplot(Med_AbsErr3, ylab="Median Absolute Error")
+```
+
+```{r}
+Med_AbsErr3$proposed_oracle = Med_AbsErr3$proposed_unif
+Med_AbsErr3 = Med_AbsErr3[,-which(names(Med_AbsErr3) %in% c("proposed_unif"))]
+pdf("./Figures/sim3_deriv_boxplot_MedAbs.pdf", width = 8, height = 6)
+par(mar = c(5, 5, 0.8, 0.8))
+boxplot(Med_AbsErr3[order(colMeans(Med_AbsErr3[sapply(Med_AbsErr3, is.numeric)]))], ylab="Median Absolute Error", cex.axis=1.6, cex.lab=1.7, col = NULL, varwidth = TRUE, boxlwd = 2, xaxt = "n")
+tick = seq_along(names(sort(colMeans(Med_AbsErr3[sapply(Med_AbsErr3, is.numeric)]))))
+axis(1, at = tick, labels = FALSE)
+text(tick, par("usr")[3] - 1, names(sort(colMeans(Med_AbsErr3[sapply(Med_AbsErr3, is.numeric)]))), srt = 45, xpd = TRUE)
 ```
 
